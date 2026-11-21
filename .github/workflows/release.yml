@@ -46,7 +46,7 @@ jobs:
           echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
           echo "version_name=$CURRENT_VERSION_NAME" >> $GITHUB_OUTPUT
 
-      - name: Build Release & Debug-target APKs
+      - name: Build Signed Release APK
         env:
           RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD || '123456' }}
           RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'lytsocoder' }}
@@ -58,8 +58,6 @@ jobs:
           LYTSO_TARGET_PKG=lytso.code ./gradlew assembleRelease
           find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} "release_output/lytsocoder-termux-api-v${VERSION}.apk" \;
           cp "release_output/lytsocoder-termux-api-v${VERSION}.apk" "release_output/lytsocoder-termux-api.apk"
-          LYTSO_TARGET_PKG=lytso.cdev ./gradlew clean assembleRelease
-          find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} "release_output/lytsocoder-termux-api-debug.apk" \;
           (cd release_output && sha256sum *.apk > checksums-sha256.txt)
 
       - name: Organize Release Artifacts
