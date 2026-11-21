@@ -1,12 +1,11 @@
-name: Build & Publish Signed Termux:API Release
+name: Build & Publish Signed LytsoCoder:API Release
 
 on:
   push:
     branches:
+      - main
       - master
   workflow_dispatch:
-  schedule:
-    - cron: '0 0 * * 0' # Weekly check on Sundays
 
 permissions:
   contents: write
@@ -30,21 +29,6 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Sync with Upstream (Scheduled or on request)
-        if: github.event_name == 'schedule'
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git remote add upstream https://github.com/termux/termux-api.git || true
-          git fetch upstream master
-          # Attempt fast-forward or merge upstream changes
-          if git merge upstream/master --no-edit; then
-            git push origin master || echo "No changes to push or push not allowed"
-          else
-            echo "Merge conflict with upstream; skipping auto-sync merge"
-            git merge --abort || true
-          fi
-
       - name: Restore Keystore from Secret
         run: |
           if [ -z "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
@@ -63,6 +47,10 @@ jobs:
           echo "version_name=$CURRENT_VERSION_NAME" >> $GITHUB_OUTPUT
 
       - name: Build Release APK
+        env:
+          RELEASE_STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD || '123456' }}
+          RELEASE_KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS || 'lytsocoder' }}
+          RELEASE_KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD || '123456' }}
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease
@@ -72,9 +60,10 @@ jobs:
         run: |
           mkdir -p release_output
           VERSION="${{ steps.version.outputs.version_name }}"
-          APK_NAME="antigem-termux-api-v${VERSION}.apk"
+          APK_NAME="lytsocoder-termux-api-v${VERSION}.apk"
           find app/build/outputs/apk/release/ -name "*.apk" -exec cp {} "release_output/${APK_NAME}" \;
-          (cd release_output && sha256sum "${APK_NAME}" > checksums-sha256.txt)
+          cp "release_output/${APK_NAME}" "release_output/lytsocoder-termux-api.apk"
+          (cd release_output && sha256sum "${APK_NAME}" lytsocoder-termux-api.apk > checksums-sha256.txt)
           echo "apk_name=${APK_NAME}" >> $GITHUB_OUTPUT
 
       - name: Upload Artifact
@@ -85,23 +74,17 @@ jobs:
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/master' || github.event_name == 'workflow_dispatch'
         with:
           tag_name: ${{ steps.version.outputs.tag }}
-          name: AntiGem Termux:API v${{ steps.version.outputs.version_name }}
+          name: LytsoCoder:API v${{ steps.version.outputs.version_name }}
           body: |
-            Custom-signed Termux:API companion APK for AntiGem.
-            
+            Signed LytsoCoder:API companion APK (`lytso.code.api`) for LytsoCoder (`lytso.code`).
+
             - Version: v${{ steps.version.outputs.version_name }}
-            - Built from commit: ${{ github.sha }}
-            - Signed with AntiGem release certificate for full API integration.
-            - SHA256 checksum:
-            ```
-            ${{ hashFiles(format('release_output/{0}', steps.artifacts.outputs.apk_name)) }}
-            ```
+            - Commit: ${{ github.sha }}
+            - Direct APK: `lytsocoder-termux-api.apk`
           draft: false
           prerelease: false
           files: release_output/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
